@@ -13,7 +13,28 @@ DRIVER_PATH = "C:\\Users\\Admin\\Documents\\nawalabot\\rotator\\chromedriver.exe
 
 # Konfigurasi Telegram Bot
 TELEGRAM_BOT_TOKEN = "8215483226:AAH9kl-Nr4tp2M3sEtvpTsaXk4QVl2_cKYs"  # Ganti dengan token bot Anda
-TELEGRAM_CHAT_ID = "-4744452096"  # Ganti dengan chat ID Anda
+TELEGRAM_CHAT_ID = None  # Akan diisi otomatis dari file atau perintah /installnawalabot
+
+def load_telegram_chat_id():
+    global TELEGRAM_CHAT_ID
+    try:
+        with open("telegram_chat_id.txt", "r") as f:
+            TELEGRAM_CHAT_ID = f.read().strip()
+            print(f"Chat ID dimuat dari file: {TELEGRAM_CHAT_ID}")
+    except FileNotFoundError:
+        print("File telegram_chat_id.txt tidak ditemukan. Gunakan /installnawalabot untuk mengatur chat ID.")
+    except Exception as e:
+        print(f"Error memuat chat ID: {e}")
+
+def save_telegram_chat_id(chat_id):
+    global TELEGRAM_CHAT_ID
+    try:
+        with open("telegram_chat_id.txt", "w") as f:
+            f.write(str(chat_id))
+        TELEGRAM_CHAT_ID = str(chat_id)
+        print(f"Chat ID disimpan: {chat_id}")
+    except Exception as e:
+        print(f"Error menyimpan chat ID: {e}")
 last_safe_message_time = 0  # Waktu terakhir pesan aman dikirim (epoch time)
 KUTT_API_KEY = "LB-c9aDly4YE2z3vlhw6M-pfHpoSHMXY1Xq0fcnN"
 SAFE_MESSAGE_INTERVAL = 3600  # 1 jam dalam detik
@@ -36,6 +57,9 @@ def setup_driver():
     return driver
 
 def send_telegram_message(chat_id, message):
+    if chat_id is None:
+        print("Peringatan: TELEGRAM_CHAT_ID belum diatur. Tidak dapat mengirim pesan.")
+        return
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": chat_id, "text": message}
     try:
@@ -73,7 +97,10 @@ def process_telegram_command(update):
         message = update["message"]["text"]
         chat_id = update["message"]["chat"]["id"]
 
-        if message.startswith("/replace"):
+        if message == "/installnawalabot":
+            save_telegram_chat_id(chat_id)
+            send_telegram_message(chat_id, f"✅ Chat ID berhasil disimpan: {chat_id}\nBot Nawala siap digunakan di grup ini.")
+        elif message.startswith("/replace"):
             parts = message.split()
             if len(parts) == 3:
                 old_domain, new_domain = parts[1], parts[2]
@@ -172,7 +199,7 @@ def automate_trustpositif(domains):
                             old_target = link['target']
                             new_target = old_target.replace(domain, new_domain)
 
-                            patch_url = f"https://kutt.it/api/v2/links{link_id}"
+                            patch_url = f"https://kutt.it/api/v2/links/{link_id}"
                             patch_headers = {"X-API-Key": KUTT_API_KEY, "Content-Type": "application/json"}
                             payload = {"target": new_target, "description": "Pergantian Domain Otomatis"}
 
@@ -228,6 +255,7 @@ def run_with_batch(input_file, interval_minutes=2, batch_size=5):
         time.sleep(interval_minutes * 60)
 
 def main():
+    load_telegram_chat_id()  # Load chat ID from file at startup
     threading.Thread(target=run_with_batch, args=("list.txt",)).start()
     last_update_id = None
     while True:
